@@ -1,6 +1,8 @@
-use axum::extract::ws::WebSocket;
+use axum::{extract::ws::WebSocket, response::Json};
 use futures::future::join_all;
 use reqwest;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
@@ -22,6 +24,7 @@ impl fmt::Display for NginxError {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SiteResponse {
     pub site: String,
     pub status: bool,
@@ -56,6 +59,32 @@ pub async fn handle_ws(mut stream: WebSocket) {
         Err(e) => {
             let _ = stream.send(e.to_string().into()).await;
         }
+    }
+}
+
+pub async fn handle_http() -> Json<Value> {
+    let var_map: HashMap<String, String> = env::vars().collect();
+    let sites = get_nginx(var_map.get("NGINX").unwrap().to_string()).await;
+    match sites {
+        Ok(sites) => {
+            let mut res = vec![];
+            for site in sites {
+                match test_site(site.clone()).await {
+                    Ok(r) => {
+                        res.push(r);
+                    }
+                    Err(e) => res.push(SiteResponse {
+                        site: format!("Could not get site: {}, with error: {}", site, e),
+                        status: false,
+                    }),
+                }
+            }
+            Json(json!(res))
+        }
+        Err(e) => Json(json!(SiteResponse {
+            site: format!("Could not get sites: {}", e),
+            status: false,
+        })),
     }
 }
 

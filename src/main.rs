@@ -9,7 +9,9 @@ async fn main() {
     dotenv().ok();
     check_vars();
 
-    let app = Router::new().route("/ws", get(handler));
+    let app = Router::new()
+        .route("/", get(sites::handle_http))
+        .route("/ws", get(handler));
 
     axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
         .serve(app.into_make_service())
