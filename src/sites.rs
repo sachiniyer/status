@@ -4,12 +4,12 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::env;
 use std::error::Error;
-use std::fmt;
+use std::{env, fmt};
 use tokio::sync::mpsc;
 use tokio::task;
 use tokio::task::JoinHandle;
+use tokio::time::{timeout, Duration};
 
 #[derive(Debug)]
 struct NginxError {
@@ -54,7 +54,9 @@ pub async fn handle_ws(mut stream: WebSocket) {
                 let _ = stream.send(message).await;
             }
 
-            let _ = join_all(tasks).await;
+            let all_tasks = join_all(tasks);
+            let timeout_duration = Duration::from_secs(3);
+            let _ = timeout(timeout_duration, all_tasks);
         }
         Err(e) => {
             let _ = stream.send(e.to_string().into()).await;
@@ -142,6 +144,7 @@ async fn parse_nginx(text: String) -> Result<Vec<String>, String> {
             }
         }
     }
+    res.retain(|x| x != "status.sachiniyer.com");
     match res.len() {
         0 => Err("Nothing found".to_string()),
         _ => Ok(res.iter().map(|x| "https://".to_string() + x).collect()),
