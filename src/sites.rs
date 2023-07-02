@@ -40,28 +40,37 @@ pub async fn handle_ws(mut stream: WebSocket) {
             for site in sites {
                 let tx = tx.clone();
                 tasks.push(task::spawn(async move {
+                    let res;
                     match test_site(site).await {
                         Ok(r) => {
-                            let _ = tx.send(r.site.into());
+                            res = r.site.into();
                         }
                         Err(e) => {
-                            let _ = tx.send(e.to_string().into());
+                            res = e.to_string().into();
                         }
                     }
+
+                    let _ = tx.send(res);
                 }));
             }
-            while let Some(message) = rx.recv().await {
-                let _ = stream.send(message).await;
-            }
-
+            let tasks_len = tasks.len();
             let all_tasks = join_all(tasks);
             let timeout_duration = Duration::from_secs(3);
             let _ = timeout(timeout_duration, all_tasks);
+            let mut i = 0;
+            while let Some(message) = rx.recv().await {
+                let _ = stream.send(message).await;
+                i += 1;
+                if i >= tasks_len {
+                    break;
+                }
+            }
         }
         Err(e) => {
             let _ = stream.send(e.to_string().into()).await;
         }
     }
+    let _ = stream.close().await;
 }
 
 pub async fn handle_http() -> Json<Value> {
@@ -70,15 +79,33 @@ pub async fn handle_http() -> Json<Value> {
     match sites {
         Ok(sites) => {
             let mut res = vec![];
+            let (tx, mut rx) = mpsc::unbounded_channel();
+            let mut tasks: Vec<JoinHandle<()>> = vec![];
             for site in sites {
-                match test_site(site.clone()).await {
-                    Ok(r) => {
-                        res.push(r);
+                let tx = tx.clone();
+                tasks.push(task::spawn(async move {
+                    let res;
+                    match test_site(site.clone()).await {
+                        Ok(r) => res = r,
+                        Err(e) => {
+                            res = SiteResponse {
+                                site: format!("Could not get site: {}, with error: {}", site, e),
+                                status: false,
+                            }
+                        }
                     }
-                    Err(e) => res.push(SiteResponse {
-                        site: format!("Could not get site: {}, with error: {}", site, e),
-                        status: false,
-                    }),
+
+                    let _ = tx.send(res);
+                }));
+            }
+            let tasks_len = tasks.len();
+            let all_tasks = join_all(tasks);
+            let timeout_duration = Duration::from_secs(3);
+            let _ = timeout(timeout_duration, all_tasks);
+            while let Some(message) = rx.recv().await {
+                res.push(message);
+                if res.len() >= tasks_len {
+                    break;
                 }
             }
             Json(json!(res))

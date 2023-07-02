@@ -8,7 +8,7 @@ use std::env;
 async fn main() {
     dotenv().ok();
     check_vars();
-
+    println!("Starting server on port 3000");
     let app = Router::new()
         .route("/", get(sites::handle_http))
         .route("/ws", get(handler));
