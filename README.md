@@ -12,3 +12,5 @@ Pulls from my [nginx conf](https://github.com/sachiniyer/cheap_portable_k3s/blob
 
 Exposes a websocket endpoint at https://status.sachiniyer.com/ws and a regular endpoint at https://status.sachiniyer.com . The websocket endpoint is really what is best, because you will get information as soon as the get request comes back. The regular HTTP endpoint is much slower. Everything is written in async with tokio, axum, and reqwest. 
 
+Is is also packaged as a docker container at [sachiyer/status](https://hub.docker.com/repository/docker/sachiyer/status/general). I use github actions to automate that deployment.
+
