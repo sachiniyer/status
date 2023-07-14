@@ -3,7 +3,7 @@ use futures::future::join_all;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::{env, fmt};
 use tokio::sync::mpsc;
@@ -149,6 +149,15 @@ async fn parse_nginx(text: String) -> Result<Vec<String>, String> {
         .map(|x| x.to_string())
         .collect();
 
+    let exclude: HashSet<String> = match lines.get(0) {
+        Some(v) => v
+            .split_whitespace()
+            .into_iter()
+            .filter(|s| s.ends_with("sachiniyer.com"))
+            .map(|s| s.to_string())
+            .collect(),
+        None => return Err("Nothing found".to_string()),
+    };
     let mut res: Vec<String> = vec![];
 
     for (i, l) in lines.iter().enumerate() {
@@ -171,7 +180,7 @@ async fn parse_nginx(text: String) -> Result<Vec<String>, String> {
             }
         }
     }
-    res.retain(|x| x != "status.sachiniyer.com");
+    res.retain(|x| !exclude.contains(x));
     match res.len() {
         0 => Err("Nothing found".to_string()),
         _ => Ok(res.iter().map(|x| "https://".to_string() + x).collect()),
@@ -191,6 +200,6 @@ async fn test_site(url: String) -> Result<SiteResponse, String> {
                 status: false,
             }),
         },
-        Err(_) => Err("Request Failed".to_string()),
+        Err(_) => Err(format!("Request Failed for {}", url)),
     }
 }
