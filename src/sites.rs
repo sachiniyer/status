@@ -87,9 +87,9 @@ pub async fn handle_http() -> Json<Value> {
                     let res;
                     match test_site(site.clone()).await {
                         Ok(r) => res = r,
-                        Err(e) => {
+                        Err(_) => {
                             res = SiteResponse {
-                                site: format!("Could not get site: {}, with error: {}", site, e),
+                                site,
                                 status: false,
                             }
                         }
@@ -200,6 +200,6 @@ async fn test_site(url: String) -> Result<SiteResponse, String> {
                 status: false,
             }),
         },
-        Err(_) => Err(format!("Request Failed for {}", url)),
+        Err(_) => Err(url),
     }
 }
