@@ -46,7 +46,7 @@ pub async fn handle_ws(mut stream: WebSocket) {
                             res = r.site.into();
                         }
                         Err(e) => {
-                            res = e.to_string().into();
+                            res = format!("Request Failed {}", e.to_string()).into();
                         }
                     }
 
