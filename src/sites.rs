@@ -188,17 +188,43 @@ async fn parse_nginx(text: String) -> Result<Vec<String>, String> {
 }
 
 async fn test_site(url: String) -> Result<SiteResponse, String> {
+    let retry_num = 3;
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let mut tasks: Vec<JoinHandle<()>> = vec![];
+    for _ in 0..retry_num {
+        let tx = tx.clone();
+        let url = url.clone();
+        tasks.push(task::spawn(async move {
+            let _ = tx.send(call_site(url).await);
+        }));
+    }
+    let tasks_len = tasks.len();
+    let all_tasks = join_all(tasks);
+    let timeout_duration = Duration::from_secs(3);
+    let _ = timeout(timeout_duration, all_tasks);
+    let mut res = vec![];
+    while let Some(message) = rx.recv().await {
+        res.push(message);
+        if res.len() >= tasks_len {
+            break;
+        }
+    }
+    let result = res.iter().fold(true, |acc, x| acc && x.is_ok());
+    match result {
+        true => Ok(SiteResponse {
+            site: url.clone(),
+            status: true,
+        }),
+        false => Err(url),
+    }
+}
+
+async fn call_site(url: String) -> Result<String, String> {
     let result = reqwest::get(url.clone()).await;
     match result {
         Ok(r) => match r.status() {
-            reqwest::StatusCode::OK => Ok(SiteResponse {
-                site: url.clone(),
-                status: true,
-            }),
-            _ => Ok(SiteResponse {
-                site: url.clone(),
-                status: false,
-            }),
+            reqwest::StatusCode::OK => Ok(url.clone()),
+            _ => Err(url),
         },
         Err(_) => Err(url),
     }

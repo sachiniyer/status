@@ -8,12 +8,13 @@ use std::env;
 async fn main() {
     dotenv().ok();
     check_vars();
-    println!("Starting server on port 3000");
+    let var_map: HashMap<String, String> = env::vars().collect();
+    println!("Starting server on {}", var_map.get("BIND_ADDR").unwrap());
     let app = Router::new()
         .route("/", get(sites::handle_http))
         .route("/ws", get(handler));
 
-    axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
+    axum::Server::bind(&var_map.get("BIND_ADDR").unwrap().parse().unwrap())
         .serve(app.into_make_service())
         .await
         .unwrap();
@@ -25,11 +26,16 @@ async fn handler(ws: WebSocketUpgrade) -> Response {
 
 fn check_vars() {
     let var_map: HashMap<String, String> = env::vars().collect();
-    let sites = var_map.get("NGINX");
-    match sites {
-        Some(_) => {}
-        None => {
-            panic!("NGINX environment variable not set");
+    let var_look = Vec::from(["NGINX", "BIND_ADDR"]);
+    let mut res = Vec::new();
+    for v in var_look {
+        let sites = var_map.get(v);
+        match sites {
+            Some(_) => {}
+            None => res.push(v),
         }
+    }
+    if !res.is_empty() {
+        panic!("{:?} environment variables not set", res);
     }
 }
