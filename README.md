@@ -16,3 +16,15 @@ Just used to check the status of my currently deployed applications. Consumed by
 Everything is written in async with tokio, axum, and reqwest.
 
 I use async and multi-threading to send out all the requests with reqwest. Then for the websocket version, I send back the results as soon as the threads complete. For the web version, I collect results from all the threads and then send it out as an HTTP response. The websocket version is what is used on my main website.
+
+## Build Instructions
+
+should be as simple as 
+
+``` sh
+cp env.sample .env
+cargo build
+cargo run
+```
+
+There are also auto built docker images at `sachiyer/status`
