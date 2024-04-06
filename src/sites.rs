@@ -1,6 +1,6 @@
 use axum::{extract::ws::WebSocket, response::Json};
 use futures::future::join_all;
-use reqwest;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -189,43 +189,39 @@ async fn parse_nginx(text: String) -> Result<Vec<String>, String> {
 
 async fn test_site(url: String) -> Result<SiteResponse, String> {
     let retry_num = 3;
-    let (tx, mut rx) = mpsc::unbounded_channel();
-    let mut tasks: Vec<JoinHandle<()>> = vec![];
-    for _ in 0..retry_num {
-        let tx = tx.clone();
-        let url = url.clone();
-        tasks.push(task::spawn(async move {
-            let _ = tx.send(call_site(url).await);
-        }));
-    }
-    let tasks_len = tasks.len();
-    let all_tasks = join_all(tasks);
     let timeout_duration = Duration::from_secs(3);
-    let _ = timeout(timeout_duration, all_tasks);
-    let mut res = vec![];
-    while let Some(message) = rx.recv().await {
-        res.push(message);
-        if res.len() >= tasks_len {
-            break;
-        }
+    let client = Client::builder()
+        .timeout(timeout_duration)
+        .build()
+        .or_else(|e| {
+            Err(format!(
+                "error with site {}, and error {}",
+                url,
+                e.to_string()
+            ))
+        })?;
+
+    for _ in 0..retry_num {
+        match call_site(&url, &client).await {
+            Ok(_) => {
+                return Ok(SiteResponse {
+                    site: url.clone(),
+                    status: true
+                })
+            },
+            _ => {}
+        };
     }
-    let result = res.iter().fold(true, |acc, x| acc && x.is_ok());
-    match result {
-        true => Ok(SiteResponse {
-            site: url.clone(),
-            status: true,
-        }),
-        false => Err(url),
-    }
+    Err(url)
 }
 
-async fn call_site(url: String) -> Result<String, String> {
-    let result = reqwest::get(url.clone()).await;
+async fn call_site(url: &String, client: &Client) -> Result<String, String> {
+    let result = client.get(url.clone()).send().await;
     match result {
         Ok(r) => match r.status() {
             reqwest::StatusCode::OK => Ok(url.clone()),
-            _ => Err(url),
+            _ => Err(url.clone()),
         },
-        Err(_) => Err(url),
+        Err(_) => Err(url.clone()),
     }
 }
